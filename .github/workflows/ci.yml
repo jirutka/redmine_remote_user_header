@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - redmine: '6.0.12'
+            ruby: '3.3'
+          - redmine: '6.1.6'
+            ruby: '3.3'
+          - redmine: '7.0.3'
+            ruby: '4.0'
+    env:
+      RAILS_ENV: test
+    steps:
+      - name: Check out Redmine
+        uses: actions/checkout@v7
+        with:
+          repository: redmine/redmine
+          ref: ${{ matrix.redmine }}
+          path: redmine
+
+      - name: Check out plugin
+        uses: actions/checkout@v7
+        with:
+          path: redmine/plugins/redmine_remote_user_header
+
+      - name: Configure test database
+        run: |
+          cat > redmine/config/database.yml <<'DATABASE'
+          test:
+            adapter: sqlite3
+            database: db/redmine_test.sqlite3
+          DATABASE
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          working-directory: redmine
+          bundler-cache: true
+
+      - name: Run Redmine integration tests
+        working-directory: redmine
+        run: |
+          bundle exec rake db:prepare
+          bundle exec rake redmine:plugins:test NAME=redmine_remote_user_header
